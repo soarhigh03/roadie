@@ -26,8 +26,10 @@
 | 조용한 동행 | 사용자 요청, 오디오 포커스 중단, 마이크 꺼짐 구분 | 기본값은 안내 종료 후 자동 발화와 자동 녹음 없음 |
 | 브리핑 | 한국경제와 NASA RSS, 게시 시각, 출처, 오래됨 표시, 실제 음성 재생 연결 | 기사 본문 요약이 아닌 발행자 헤드라인 발췌. 실시간 교통 정보 아님 |
 | 휴식 | 피로 표현 규칙, 선택적 2시간 알림, FusedLocation, Kakao Local, NaviHelper 연결 | 앱 세션 경과 시간이며 실제 운행 시간이나 졸음 감지 아님. 도로 방향 탐색 없음 |
-| 화면 | Figma 입체 원본, Compose UI, 크기별 배치, 큰 버튼, 접근성 설명 | 정적인 입체 렌더 이미지 사용. 실시간 3D와 표정 합성 없음 |
+| 화면 | Figma 입체 원본과 상태별 3D 표정, Compose UI, 크기별 배치, 큰 버튼, 접근성 설명 | 정적인 입체 렌더 이미지 사용. 실시간 3D 엔진은 사용하지 않음 |
 | 데모 | 설정에서 명시적으로 전환, 화면에 데모 표시, 예시 발화 버튼 | 녹음, 합성 음성, 실제 AI와 실제 장소 안내를 실행하지 않음 |
+
+**검증 결과:** 코어 23개, 서버 23개, Pleos 계측 8개 통과. 합성 한국어 입력으로 STT, 실제 AI 응답, TTS 완료를 연결했고, 모의 차량 위치로 실제 휴게소를 검색했습니다. 내비 경로 완료는 시간 초과로 확인하지 못했습니다.
 
 플랫폼 실행과 연결 검증의 구체적인 결과는 [검증 기록](docs/verification.md)을 확인하세요. SDK 어댑터 코드가 있다는 것과 실제 차량에서 기능을 검증했다는 것은 별개입니다.
 
@@ -35,7 +37,7 @@
 
 [최신 Figma 디자인](https://www.figma.com/design/JfTYX9XzesZxlyADnpzlR2/Roadie)을 기준으로 브랜드, Foundations, Components, Vehicle experience를 확인했습니다. 앱은 Compose 텍스트와 버튼으로 구현했습니다. 전체 Figma 스크린샷을 앱 화면으로 사용하지 않습니다.
 
-입체 캐릭터는 원본 `3:116`, README 배너는 브랜드 보드 `6:2`를 로컬 PNG로 보관합니다. 만료되는 Figma 이미지 주소를 런타임에서 요청하지 않습니다. 크림, 핑크, 라임과 크롬 표현은 기존 로디를 유지합니다. 주행 중 반복 애니메이션을 사용하지 않습니다. [노드와 구현 대응](docs/design/implementation.md)
+입체 캐릭터는 원본 `3:116`과 이를 편집한 말하기, 조용한 동행, 휴식 표정 3종을 사용합니다. README 배너는 브랜드 보드 `6:2`를 로컬 PNG로 보관합니다. [표정 에셋과 생성 프롬프트](docs/design/character-expressions.md) 만료되는 Figma 이미지 주소를 런타임에서 요청하지 않습니다. 크림, 핑크, 라임과 크롬 표현은 기존 로디를 유지합니다. 주행 중 반복 애니메이션을 사용하지 않습니다. [노드와 구현 대응](docs/design/implementation.md)
 
 아래는 Pleos 2.1.0에서 네이티브 Compose로 렌더한 화면입니다. 데모 상태를 표시한 계측 캡처이며 실제 AI 응답으로 표시하지 않습니다.
 
@@ -43,9 +45,13 @@
 | --- | --- |
 | ![낮 테마의 출발 화면](docs/screenshots/day-ready.png) | ![밤 테마의 조용한 동행](docs/screenshots/night-quiet.png) |
 
+| 말하기 | 휴식 제안 |
+| --- | --- |
+| ![작은 입을 열고 말하는 입체 로디](docs/screenshots/day-speaking.png) | ![안전한 정차와 휴식을 제안하는 입체 로디](docs/screenshots/rest-suggestion.png) |
+
 <img src="docs/screenshots/compact-muted.png" alt="폭 560dp의 작은 창에서 마이크 켜기와 대화 끝내기" width="480" />
 
-실제 RSS를 연결한 [Pleos 출처 화면](docs/screenshots/pleos-live-sources.png)과 측정한 화면 규격, 플랫폼 제약은 [검증 기록](docs/verification.md)에 기록합니다.
+[실제 AI 응답](docs/screenshots/pleos-live-ai-response.png)과 [실제 휴게소 검색](docs/screenshots/pleos-live-rest-places.png)도 기록했습니다. 실제 RSS를 연결한 [Pleos 출처 화면](docs/screenshots/pleos-live-sources.png)과 측정한 화면 규격, 플랫폼 제약은 [검증 기록](docs/verification.md)에 기록합니다.
 
 ## 기술과 구조
 
@@ -137,9 +143,11 @@ npm --prefix server test
 npm --prefix server run check
 # 실행 중인 로컬 서버와 실제 공개 RSS 확인
 node --env-file=server/.env scripts/smoke-server.mjs
+# 실제 공급자 연결 검사. 설정된 키를 사용하며 AI 호출 비용이 발생할 수 있음
+node --env-file=server/.env scripts/verify-live.mjs --places --ai
 ```
 
-동일 작업 디렉토리에서 Gradle 빌드 여러 개를 동시에 실행하지 마세요. 코어 테스트는 요청 취소와 늦은 응답 무시, 발화 중단, 포커스 복귀, 권한 오류, 네트워크 재시도, 기억 동의와 삭제, 데모 격리, 휴식 제안과 출처 보존을 다룹니다. Android 계측 테스트는 작은 화면의 핵심 버튼, 설정 복원, 저장 암호화와 출처 제한을 다룹니다. 테스트 호스트는 Pleos 셸이 창 크기 변경으로 Activity를 재생성해도 내용을 다시 구성합니다. 서버 테스트는 인증, 제한, 입력 검증, 요청 취소와 RSS 데이터 처리를 다룹니다.
+동일 작업 디렉토리에서 Gradle 빌드 여러 개를 동시에 실행하지 마세요. 코어 테스트는 요청 취소와 늦은 응답 무시, 발화 중단, 포커스 복귀, 권한 오류, 네트워크 재시도, 기억 동의와 삭제, 데모 격리, 휴식 제안과 출처 보존을 다룹니다. Android 계측 테스트는 작은 화면과 1.5배 글자의 핵심 버튼, 설정 복원, 저장 암호화, 출처 제한, 화면 재생성과 백그라운드 종료, 실제 오디오 포커스 콜백을 다룹니다. 테스트 호스트는 Pleos 셸이 창 크기 변경으로 Activity를 재생성해도 내용을 다시 구성합니다. 서버 테스트는 인증, 제한, 입력 검증, 요청 취소와 RSS 데이터 처리, 휴게소 분류와 페이지 탐색을 다룹니다.
 
 ## 서명과 APK
 
@@ -150,7 +158,7 @@ bash scripts/package-release.sh
 
 첫 명령은 로컬 release 서명 키와 설정이 없을 때만 생성합니다. `.secrets/roadie-release.jks`와 `keystore.properties`는 Git에서 제외되므로 **두 파일을 안전한 별도 위치에 백업**하세요. 같은 앱 업데이트에는 같은 서명 키가 필요합니다.
 
-패키징 도구는 테스트와 lint, release 빌드, `apksigner verify`를 실행하고 [release APK](apk/Roadie_Roadie_release.apk)와 [SHA-256](apk/SHA256SUMS)을 만듭니다. debug APK의 이름만 바꾸지 않습니다. 공식 파일명 규칙의 팀명은 현재 `Roadie`로 사용하며 실제 제출 팀명이 다르면 제출 전에 바꾸세요. 서명 검증과 설치 결과는 [검증 기록](docs/verification.md)에 기록합니다.
+현재 제공 버전은 **0.1.1**입니다. 패키징 도구는 테스트와 lint, release 빌드, `apksigner verify`를 실행하고 [release APK](apk/Roadie_Roadie_release.apk)와 [SHA-256](apk/SHA256SUMS)을 만듭니다. debug APK의 이름만 바꾸지 않습니다. 공식 파일명 규칙의 팀명은 현재 `Roadie`로 사용하며 실제 제출 팀명이 다르면 제출 전에 바꾸세요. 서명 검증과 설치 결과는 [검증 기록](docs/verification.md)에 기록합니다.
 
 최종 소스 커밋은 `git rev-parse HEAD`, 원격 반영은 `git rev-parse origin/main`으로 확인할 수 있습니다. 이 작업은 실제 접수, 이메일 발송, 공모전 제출을 수행하지 않습니다.
 
@@ -162,7 +170,7 @@ bash scripts/package-release.sh
 - 웨이크워드, 상시 녹음, 카메라 기반 졸음 감지, 운행 시간 추적, 실제 차량 검증을 구현 또는 확인한 것으로 표시하지 않습니다.
 - 기본값은 답변 후 마이크를 다시 켜지 않습니다. 자동 듣기 동의가 있어도 브리핑, 휴식 제안, 명시적인 조용함 또는 마이크 끄기 뒤에는 자동으로 이어 듣지 않습니다.
 - 오디오 포커스 상실은 중요한 오디오에 양보하는 신호입니다. 이를 모두 내비 안내 이벤트라고 단정하지 않습니다. 경로 탐색 성공도 안내 음성 재생과 다른 이벤트입니다.
-- Kakao의 주변 장소는 직선거리 기준이며 현재 도로 방향과 연결 여부를 보장하지 않습니다. 차량 내비에서 경로를 확인해야 합니다.
+- Kakao 검색은 교통 시설의 휴게소와 졸음쉼터 분류를 확인하고 매장, 관리 영업소, 택시 전용 시설을 제외합니다. 주변 장소는 직선거리 기준이며 현재 도로 방향과 연결 여부를 보장하지 않습니다. 차량 내비에서 경로를 확인해야 합니다.
 
 ## 출처와 라이선스
 
