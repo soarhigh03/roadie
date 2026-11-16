@@ -124,8 +124,10 @@ data class HomeActions(
                     Companion(state.phase, preferences.theme == Theme.NIGHT, Modifier.weight(1f).height(if (short) 210.dp else 330.dp))
                 }
                 if (preferences.mode == Mode.DEMO && state.active && settingsAllowed) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { actions.demo("오늘 길이 예뻐") }, modifier = Modifier.heightIn(min = 56.dp)) { Text("데모 발화 보내기") }
-                    OutlinedButton(onClick = { actions.demo("졸려서 쉬고 싶어") }, modifier = Modifier.heightIn(min = 56.dp)) { Text("피로 표현 예시") }
+                    OutlinedButton(onClick = { actions.demo("오늘 길이 예뻐") }, modifier = Modifier.heightIn(min = 56.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) { Text("데모 발화 보내기") }
+                    OutlinedButton(onClick = { actions.demo("졸려서 쉬고 싶어") }, modifier = Modifier.heightIn(min = 56.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) { Text("피로 표현 예시") }
                 }
                 if (state.active) FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(actions.briefing, enabled = state.phase != Phase.MUTED, modifier = Modifier.heightIn(min = 56.dp)) { Text("관심사 브리핑", color = MaterialTheme.colorScheme.onBackground) }

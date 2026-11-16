@@ -3,9 +3,13 @@ package ai.roadie.app
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -95,6 +99,7 @@ class RoadieInstrumentedTest {
         } }
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         fun save(name: String) {
+            compose.waitUntil(20_000) { runCatching { compose.onNodeWithText("roadie").isDisplayed() }.getOrDefault(false) }
             compose.waitForIdle()
             val directory = java.io.File(context.filesDir, "screenshots").apply { mkdirs() }
             java.io.File(directory, name).outputStream().use {
@@ -102,10 +107,30 @@ class RoadieInstrumentedTest {
             }
         }
         save("day-ready.png")
+        compose.runOnIdle { state.value = SessionState(Phase.SPEAKING, true, "테스트 화면이에요. 오늘도 안전하게 함께 갈게요.") }
+        save("day-speaking.png")
+        compose.runOnIdle { state.value = SessionState(Phase.REST, true, "안전한 곳에 정차해서 쉬어요. 대화가 휴식을 대신할 수는 없어요.") }
+        save("rest-suggestion.png")
         compose.runOnIdle { theme.value = Theme.NIGHT; state.value = SessionState(Phase.QUIET, true, "말없이 함께 가도 괜찮아요.") }
         save("night-quiet.png")
         compose.runOnIdle { compact.value = true; state.value = SessionState(Phase.MUTED, true, "마이크가 꺼져 있어요.") }
-        compose.onNodeWithText("마이크 켜기").assertIsDisplayed()
         save("compact-muted.png")
+        compose.onNodeWithText("마이크 켜기").assertIsDisplayed()
+    }
+
+    @Test fun shortWindowWithLargeTextKeepsPrimaryControlsVisible() {
+        var muted = false
+        show { RoadieTheme(Theme.NIGHT) {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.5f)) {
+                Box(Modifier.width(480.dp).height(360.dp)) {
+                    HomeScreen(SessionState(Phase.LISTENING, true), Preferences(), false, false, actions(mute = { muted = true }))
+                }
+            }
+        } }
+        compose.onNodeWithText("듣고 있어요").assertIsDisplayed()
+        compose.onNodeWithText("마이크 끄기").assertIsDisplayed().performClick()
+        compose.onNodeWithText("조용히 가기").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(muted) }
     }
 }
