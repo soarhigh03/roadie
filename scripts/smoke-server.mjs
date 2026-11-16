@@ -24,4 +24,10 @@ if (!process.env.OPENAI_API_KEY) {
   assert.equal((await response.json()).error, 'ai_not_configured');
   console.log('AI credentials absent: explicit 503 verified, no synthetic fallback.');
 }
+if (!process.env.KAKAO_REST_API_KEY) {
+  const response = await call('/v1/rest-places', { method: 'POST', headers, body: JSON.stringify({ latitude: 37, longitude: 127 }) });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, 'places_not_configured');
+  console.log('Place credentials absent: explicit 503 verified, no provider call.');
+}
 console.log('Local HTTP smoke checks passed.');

@@ -1,0 +1,11 @@
+{
+  "applicationId": "ai.roadie.app",
+  "versionName": "0.1.0",
+  "sourceCommit": "9ee1a2e461814e912dd598821bfcefa2558e6d04",
+  "builtAtUtc": "2026-11-16T08:28:59.936965+00:00",
+  "apk": "Roadie_Roadie_release.apk",
+  "sha256": "9441348afe5aa27c19ee9965f9e801ac93a0c6a8682d942f863c018fe87181ad",
+  "signerCertificateSha256": "e8adcc3577d331ad3b0e2f5c976d17362ebf2036b3804d10b31b88d954ab01ed",
+  "minSdk": 28,
+  "targetSdk": 34
+}
