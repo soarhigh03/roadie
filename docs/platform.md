@@ -37,3 +37,5 @@ ON_DEVICE 모드는 문서상 별도 client ID와 secret을 요구하지 않는�
 ## 공모전 안내
 
 [개발 환경](https://appdevchallenge.auto-hmg.io/guide/development)의 API 28 이상, Gradle 8.0 이상, Java 또는 Kotlin 조건을 반영했다. [제출 안내](https://appdevchallenge.auto-hmg.io/guide/submission)는 GitHub 소스, `/apk/팀명_앱이름_release.apk` 또는 Release APK, README와 최종 커밋 해시를 안내한다. 확인 시점에는 1차의 소스와 APK 제출이 선택 가산점, 2차 PT에서는 동작 가능한 앱이 요구되는 것으로 표기되어 있었다. 실제 제출과 이메일 발송은 수행하지 않는다.
+
+한국어 음성 요청은 STT와 TTS 모두 `setLocale(Locale.KOREA)` 후 실행한다. 시스템 언어에 의존하지 않는다. 2026-11-16에 확인한 [STT locale](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/SpeechToText/set-locale)과 [TTS locale](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/TextToSpeech/set-locale) 문서의 호출 순서를 따른다. debug 빌드의 `RoadieVoice` 로그에는 준비, 시작, 최종 결과 도착, 종료와 오류 종류만 남기며 발화나 응답 내용은 기록하지 않는다. release 빌드는 이 진단 이벤트도 기록하지 않는다.

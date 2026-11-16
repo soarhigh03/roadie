@@ -3,6 +3,8 @@ package ai.roadie.app.platform
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
+import ai.roadie.app.BuildConfig
 import ai.pleos.playground.stt.SpeechToText
 import ai.pleos.playground.tts.TextToSpeech
 import ai.roadie.core.RoadieFailure
@@ -10,11 +12,14 @@ import ai.roadie.core.VoicePort
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import java.util.Locale
 
 /** Pleos Speech Service only. No Android SpeechRecognizer or direct AudioRecord fallback. */
 class PleosVoice(private val context: Context) : VoicePort {
     private val main = Handler(Looper.getMainLooper())
     private var cleanup: (() -> Unit)? = null
+    // Debug events contain no recognized text, response, coordinates or credentials.
+    private fun event(name: String) { if (BuildConfig.DEBUG) Log.d("RoadieVoice", name) }
 
     private fun failure(code: String) = RoadieFailure(when (code) {
         "PERMISSION_DENIED" -> "차량 음성 서비스 권한을 허용해주세요. 정차 후 앱 권한을 확인할 수 있어요."
@@ -43,19 +48,20 @@ class PleosVoice(private val context: Context) : VoicePort {
             return suspendCancellableCoroutine { continuation ->
                 fun fail(code: String) { if (!closed && continuation.isActive) continuation.resumeWithException(failure(code)) }
                 listener = object : ai.pleos.playground.stt.listener.ResultListener {
-                    override fun onReady() = Unit
-                    override fun onStartedRecognition() = Unit
+                    override fun onReady() { event("stt.ready") }
+                    override fun onStartedRecognition() { event("stt.started") }
                     override fun onUpdated(stt: String, completed: Boolean) { main.post {
                         if (!closed && continuation.isActive) {
-                            if (completed) continuation.resume(stt) else onPartial(stt)
+                            if (completed) { event("stt.final"); continuation.resume(stt) } else onPartial(stt)
                         }
                     } }
                     override fun onUpdatedEpdData(on: Long, off: Long) = Unit
                     override fun onUpdatedRms(rms: Double) = Unit
                     override fun onEndedRecognition() { main.post {
+                        event("stt.ended")
                         if (!closed && continuation.isActive) continuation.resumeWithException(RoadieFailure("잘 듣지 못했어요. 다시 말해주세요."))
                     } }
-                    override fun onError(errorType: ai.pleos.playground.stt.constant.ErrorType) { main.post { fail(errorType.name) } }
+                    override fun onError(errorType: ai.pleos.playground.stt.constant.ErrorType) { main.post { event("stt.error.${errorType.name}"); fail(errorType.name) } }
                 }
                 continuation.invokeOnCancellation { main.post { close() } }
                 try {
@@ -63,6 +69,7 @@ class PleosVoice(private val context: Context) : VoicePort {
                         override fun onSuccess() { main.post {
                             if (!closed && continuation.isActive) try {
                                 sdk.addListener(listener!!)
+                                sdk.setLocale(Locale.KOREA)
                                 sdk.request()
                             } catch (_: SecurityException) { fail("PERMISSION_DENIED") }
                             catch (_: Exception) { fail("UNKNOWN") }
@@ -92,10 +99,10 @@ class PleosVoice(private val context: Context) : VoicePort {
             suspendCancellableCoroutine<Unit> { continuation ->
                 fun fail(code: String) { if (!closed && continuation.isActive) continuation.resumeWithException(failure(code)) }
                 listener = object : ai.pleos.playground.tts.listener.EventListener {
-                    override fun onReady() = Unit
-                    override fun onStart() = Unit
+                    override fun onReady() { event("tts.ready") }
+                    override fun onStart() { event("tts.started") }
                     override fun onUpdatedRms(rms: Double) = Unit
-                    override fun onDone() { main.post { if (!closed && continuation.isActive) continuation.resume(Unit) } }
+                    override fun onDone() { main.post { event("tts.done"); if (!closed && continuation.isActive) continuation.resume(Unit) } }
                     override fun onStop() { main.post { if (!closed && continuation.isActive) continuation.resumeWithException(RoadieFailure("음성 재생이 중단됐어요.")) } }
                     override fun onError(errorType: ai.pleos.playground.tts.constant.ErrorType) { main.post { fail(errorType.name) } }
                 }
@@ -104,7 +111,9 @@ class PleosVoice(private val context: Context) : VoicePort {
                     sdk.initialize(object : ai.pleos.playground.tts.listener.OnInitializeListener {
                         override fun onSuccess() { main.post {
                             if (!closed && continuation.isActive) try {
-                                sdk.addEventListener(listener!!); sdk.speak(text)
+                                sdk.addEventListener(listener!!)
+                                sdk.setLocale(Locale.KOREA)
+                                sdk.speak(text)
                             } catch (_: SecurityException) { fail("PERMISSION_DENIED") }
                             catch (_: Exception) { fail("UNKNOWN") }
                         } }
