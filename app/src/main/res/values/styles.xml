@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.Roadie" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#DDFF82</item>
+        <item name="android:windowBackground">#FFFEF5</item>
+    </style>
+</resources>
