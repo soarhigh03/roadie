@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createApp, validateChat, validateCoordinates } from '../src/app.js';
-import { createProviders, parseFeed, clean } from '../src/providers.js';
+import { createProviders, parseFeed, clean, selectRestPlaces } from '../src/providers.js';
 
 const token = 'development-test-token-with-at-least-32-characters';
 const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
@@ -117,3 +117,48 @@ test('OpenAI requests disable response storage and keep keys in server headers',
   assert.ok(!request.body.includes('test-key')); assert.equal(request.headers.Authorization, 'Bearer test-key');
 });
 test('display strings remove the prohibited separators', () => { assert.equal(clean('a\u00b7b\u2014c'), 'a,b,c'); });
+
+const rest = (id, extra = {}) => ({ id, place_name: '휴게소 서울방향', category_name: '교통,수송 > 휴게소 > 고속도로휴게소',
+  x: '127.1', y: '37.3', distance: '3000', address_name: '테스트 주소', ...extra });
+test('rest search excludes shops, offices and restricted facilities by category and name', () => {
+  const places = selectRestPlaces([
+    rest('cafe', { place_name: '카페 휴게소점', category_name: '음식점 > 카페' }),
+    rest('office', { place_name: '대주산업 죽전영업소', category_name: '음식점 > 한식' }),
+    rest('taxi', { place_name: '기흥택시쉼터', category_name: '교통,수송 > 휴게소' }),
+    rest('staff', { place_name: '휴게소 직원주차장', category_name: '교통,수송 > 교통시설 > 주차장' }),
+    rest('rest'), rest('break', { category_name: '교통,수송 > 휴게소 > 졸음쉼터' }),
+  ]);
+  assert.deepEqual(places.map(p => p.id), ['rest', 'break']);
+});
+test('rest results require valid coordinates and distance, deduplicate and preserve direction labels', () => {
+  const places = selectRestPlaces([null, rest('empty', { x: '' }), rest('range', { y: '91' }), rest('nan', { distance: 'unknown' }),
+    rest('far', { distance: '20001' }), rest('negative', { distance: '-1' }), rest('a'), rest('a'), rest('b', { distance: '1000' })]);
+  assert.deepEqual(places.map(p => p.id), ['b', 'a']);
+  assert.equal(places[0].name, '휴게소 서울방향');
+});
+test('rest search paginates past shops but stops after three valid facilities', async () => {
+  const pages = [];
+  const providers = createProviders({ kakaoKey: 'test-key' }, async url => {
+    pages.push(Number(new URL(url).searchParams.get('page')));
+    assert.equal(new URL(url).searchParams.get('size'), '15');
+    return Response.json({ meta: { is_end: false }, documents: pages.length === 1 ? [rest('shop', { category_name: '음식점 > 한식' })] : [rest('1'), rest('2'), rest('3')] });
+  });
+  const result = await providers.places(37.3, 127.1, new AbortController().signal);
+  assert.equal(result.places.length, 3); assert.deepEqual(pages, [1, 2]);
+});
+test('rest search is bounded and never invents a fallback when no facility matches', async () => {
+  let calls = 0;
+  const providers = createProviders({ kakaoKey: 'test-key' }, async () => {
+    calls++; return Response.json({ meta: { is_end: false }, documents: [rest('shop', { category_name: '음식점 > 카페' })] });
+  });
+  assert.deepEqual((await providers.places(37.3, 127.1, new AbortController().signal)).places, []);
+  assert.equal(calls, 3);
+});
+test('cancelling rest search prevents subsequent pages', async () => {
+  const abort = new AbortController(); let calls = 0;
+  const providers = createProviders({ kakaoKey: 'test-key' }, async () => {
+    calls++; abort.abort(); return Response.json({ meta: { is_end: false }, documents: [rest('shop', { category_name: '음식점 > 카페' })] });
+  });
+  await assert.rejects(providers.places(37.3, 127.1, abort.signal), { name: 'AbortError' });
+  assert.equal(calls, 1);
+});

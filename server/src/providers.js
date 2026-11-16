@@ -15,6 +15,29 @@ const safeUrl = (value, host) => {
   catch { return false; }
 };
 
+// Kakao category_name is a hierarchy, not a search-title match. Keep actual rest
+// facilities and reject businesses located inside them and restricted facilities.
+export function selectRestPlaces(documents) {
+  const seen = new Set();
+  return documents.flatMap(p => {
+    if (!p || typeof p !== 'object') return [];
+    const category = clean(p.category_name).split('>').map(v => v.trim());
+    const name = clean(p.place_name).slice(0, 160);
+    const id = clean(p.id).slice(0, 80);
+    const number = value => typeof value === 'number' || typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+    const latitude = number(p.y), longitude = number(p.x), distanceMeters = number(p.distance);
+    if (category[0] !== '교통,수송' || !category.includes('휴게소') ||
+        !['휴게소', '고속도로휴게소', '졸음쉼터'].includes(category.at(-1)) ||
+        /택시|직원|영업소|사무소|관리소|전용/.test(name) || !id || !name || seen.has(id) ||
+        !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
+        !Number.isFinite(longitude) || Math.abs(longitude) > 180 ||
+        !Number.isFinite(distanceMeters) || distanceMeters < 0 || distanceMeters > 20000) return [];
+    seen.add(id);
+    return [{ id, name, address: clean(p.road_address_name || p.address_name).slice(0, 240),
+      latitude, longitude, distanceMeters: Math.round(distanceMeters), category: category.join(' > ') }];
+  }).sort((a, b) => a.distanceMeters - b.distanceMeters).slice(0, 3);
+}
+
 export function parseFeed(xml, topic, now = Date.now()) {
   if (!feeds[topic] || /<!DOCTYPE|<!ENTITY/i.test(xml)) throw new ServiceError(502, 'invalid_feed');
   const parsed = new XMLParser({ ignoreAttributes: false, processEntities: false }).parse(xml);
@@ -75,12 +98,20 @@ export function createProviders(config, fetchImpl = fetch) {
     async places(latitude, longitude, signal) {
       if (!config.kakaoKey) throw new ServiceError(503, 'places_not_configured');
       const url = new URL('https://dapi.kakao.com/v2/local/search/keyword.json');
-      Object.entries({ query: '휴게소', x: longitude, y: latitude, radius: 20000, sort: 'distance', size: 3 }).forEach(([k,v]) => url.searchParams.set(k,String(v)));
-      const json = JSON.parse(await call(url, { headers: { Authorization: `KakaoAK ${config.kakaoKey}` } }, signal));
-      const places = (json.documents ?? []).filter(p => Number.isFinite(Number(p.y)) && Number.isFinite(Number(p.x))).slice(0,3).map(p => ({
-        id: String(p.id), name: clean(p.place_name), address: clean(p.road_address_name || p.address_name),
-        latitude: Number(p.y), longitude: Number(p.x), distanceMeters: Number(p.distance) || 0,
-      }));
+      Object.entries({ query: '휴게소', x: longitude, y: latitude, radius: 20000, sort: 'distance', size: 15 }).forEach(([k,v]) => url.searchParams.set(k,String(v)));
+      const candidates = [];
+      let places = [];
+      // Search up to 45 candidates so nearby shops cannot hide usable facilities.
+      // Every page shares the caller's cancellation and server deadline.
+      for (let page = 1; page <= 3; page++) {
+        signal.throwIfAborted();
+        url.searchParams.set('page', String(page));
+        const json = JSON.parse(await call(url, { headers: { Authorization: `KakaoAK ${config.kakaoKey}` } }, signal));
+        if (!Array.isArray(json.documents)) throw new ServiceError(502, 'invalid_places');
+        candidates.push(...json.documents);
+        places = selectRestPlaces(candidates);
+        if (places.length === 3 || json.meta?.is_end !== false || json.documents.length === 0) break;
+      }
       return { places, source: 'Kakao Local', fetchedAt: new Date().toISOString() };
     },
   };
