@@ -80,9 +80,15 @@ private fun Phase.title(): String = when (this) {
 
 @Composable private fun Companion(phase: Phase, night: Boolean, modifier: Modifier = Modifier) {
     val quiet = phase in setOf(Phase.QUIET, Phase.MUTED, Phase.PAUSED)
+    val artwork = when (phase) {
+        Phase.SPEAKING -> R.drawable.roadie_speaking
+        Phase.QUIET, Phase.MUTED, Phase.PAUSED -> R.drawable.roadie_quiet
+        Phase.REST, Phase.ERROR -> R.drawable.roadie_rest
+        else -> R.drawable.roadie_original
+    }
     Box(modifier.clip(RoundedCornerShape(32.dp)).background(if (night) Color(0xFF22252B) else Color(0xFFFBE0EF))
         .border(2.dp, if (quiet) Silver.copy(alpha = .4f) else Pink.copy(alpha = .5f), RoundedCornerShape(32.dp)), contentAlignment = Alignment.Center) {
-        Image(painterResource(R.drawable.roadie_original), "입체 로디, ${phase.label()}",
+        Image(painterResource(artwork), "입체 로디, ${phase.label()}",
             Modifier.fillMaxSize().padding(if (quiet) 32.dp else 12.dp).clip(RoundedCornerShape(24.dp)),
             contentScale = ContentScale.Fit, alpha = if (night) .76f else 1f)
     }
