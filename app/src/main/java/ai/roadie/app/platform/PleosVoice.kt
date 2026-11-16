@@ -57,10 +57,9 @@ class PleosVoice(private val context: Context) : VoicePort {
                     } }
                     override fun onUpdatedEpdData(on: Long, off: Long) = Unit
                     override fun onUpdatedRms(rms: Double) = Unit
-                    override fun onEndedRecognition() { main.post {
-                        event("stt.ended")
-                        if (!closed && continuation.isActive) continuation.resumeWithException(RoadieFailure("잘 듣지 못했어요. 다시 말해주세요."))
-                    } }
+                    // End notification does not promise that the final result was delivered first.
+                    // Only a completed result, an explicit error or the conversation timeout ends this await.
+                    override fun onEndedRecognition() { event("stt.ended") }
                     override fun onError(errorType: ai.pleos.playground.stt.constant.ErrorType) { main.post { event("stt.error.${errorType.name}"); fail(errorType.name) } }
                 }
                 continuation.invokeOnCancellation { main.post { close() } }
