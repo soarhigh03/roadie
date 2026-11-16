@@ -14,8 +14,9 @@ class ConversationTest {
         var listens = 0
         var speechGate: CompletableDeferred<Unit>? = null
         var failure: Exception? = null
+        var speechFailure: Exception? = null
         override suspend fun listen(onPartial: (String) -> Unit): String { listens++; failure?.let { throw it }; return input.receive() }
-        override suspend fun speak(text: String) { spoken += text; speechGate?.await() }
+        override suspend fun speak(text: String) { speechFailure?.let { throw it }; spoken += text; speechGate?.await() }
         override fun stop() { stops++ }
     }
     class Backend : BackendPort {
@@ -151,5 +152,28 @@ class ConversationTest {
         val f = Fixture(this, Preferences(proactive = true)); f.utter(); val n = f.voice.spoken.size
         f.c.quiet(); advanceTimeBy(21 * 60_000); f.c.tick(); runCurrent(); assertEquals(n, f.voice.spoken.size)
         f.c.mute(); advanceTimeBy(21 * 60_000); f.c.tick(); runCurrent(); assertEquals(n, f.voice.spoken.size)
+    }
+    @Test fun `speech retry replays existing reply without another model request`() = runTest {
+        val f = Fixture(this, Preferences(remember = true))
+        f.voice.speechFailure = RoadieFailure("음성 오류"); f.utter()
+        assertEquals(Phase.ERROR, f.c.state.value.phase)
+        f.voice.speechFailure = null; f.c.retry(); runCurrent()
+        assertEquals(1, f.backend.calls); assertEquals(2, f.memory.turns.size)
+        assertEquals(Phase.WAITING, f.c.state.value.phase); f.c.end()
+    }
+    @Test fun `demo never reads or overwrites live memory`() = runTest {
+        val f = Fixture(this, Preferences(remember = true)); f.utter(); f.c.end()
+        val saved = f.memory.turns; val writes = f.memory.writes
+        f.c.configure(Preferences(remember = true, mode = Mode.DEMO)); f.utter()
+        assertTrue(f.backend.histories.last().isEmpty()); assertEquals(saved, f.memory.turns); assertEquals(writes, f.memory.writes)
+        f.c.configure(Preferences(remember = true, mode = Mode.LIVE)); f.utter()
+        assertEquals(saved, f.backend.histories.last()); f.c.end()
+    }
+    @Test fun `new conversation instance restores only opted in memory`() = runTest {
+        val f = Fixture(this, Preferences(remember = true)); f.utter(); f.c.end()
+        val next = Conversation(this, f.voice, f.backend, f.focus, f.memory)
+        next.configure(Preferences(remember = true)); next.start(); runCurrent()
+        f.voice.input.send("다시 왔어"); runCurrent()
+        assertEquals(2, f.backend.histories.last().size); next.end()
     }
 }

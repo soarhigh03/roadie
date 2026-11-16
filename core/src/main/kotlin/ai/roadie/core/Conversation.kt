@@ -17,7 +17,7 @@ class Conversation(
     private val mutable = MutableStateFlow(SessionState())
     val state = mutable.asStateFlow()
     var preferences = initialPreferences; private set
-    private var history = if (initialPreferences.remember) memory.load().takeLast(6) else emptyList()
+    private var history = if (initialPreferences.remember && initialPreferences.mode == Mode.LIVE) memory.load().takeLast(6) else emptyList()
     private var generation = 0L
     private var work: Job? = null
     private var startedAt = 0L
@@ -28,6 +28,10 @@ class Conversation(
     private var retry: (() -> Unit)? = null
 
     fun configure(value: Preferences) {
+        if (value.mode != preferences.mode) {
+            end()
+            history = if (value.remember && value.mode == Mode.LIVE) memory.load().takeLast(6) else emptyList()
+        } else if (value.remember && !preferences.remember && value.mode == Mode.LIVE) history = memory.load().takeLast(6)
         if (!value.remember) { memory.clear(); if (preferences.remember) history = emptyList() }
         preferences = value
     }
@@ -54,7 +58,7 @@ class Conversation(
         cancelWork()
         retry = { listen() }
         if (!focus.acquire()) { pauseForFocus(false); return }
-        mutable.value = state.value.copy(phase = Phase.LISTENING, message = "편하게 말해요. 이야기가 끝나면 이어갈게요.", partial = "", retryable = false, permissionDenied = false)
+        mutable.value = state.value.copy(phase = Phase.LISTENING, message = "편하게 말해요. 이야기가 끝나면 이어갈게요.", partial = "", briefing = null, retryable = false, permissionDenied = false)
         val stamp = generation
         work = scope.launch {
             try {
@@ -63,7 +67,11 @@ class Conversation(
                 voice.stop()
                 handleText(text, stamp)
             } catch (e: CancellationException) {
-                if (e is TimeoutCancellationException && stamp == generation) fail(RoadieFailure("잘 듣지 못했어요. 마이크와 권한을 확인하고 다시 말해주세요."))
+                if (e is TimeoutCancellationException && stamp == generation) fail(RoadieFailure(when (state.value.phase) {
+                    Phase.THINKING -> "응답이 늦어지고 있어요. 다시 연결할 수 있어요."
+                    Phase.SPEAKING -> "음성 재생이 지연됐어요. 다시 재생할 수 있어요."
+                    else -> "잘 듣지 못했어요. 마이크와 권한을 확인하고 다시 말해주세요."
+                }))
             } catch (e: Exception) { if (stamp == generation) fail(e) }
         }
     }
@@ -108,8 +116,20 @@ class Conversation(
         if (stamp != generation || !canAct()) return
         if (reply.isBlank()) throw RoadieFailure("응답을 받지 못했어요. 다시 연결해주세요.")
         history = (history + Turn("user", text) + Turn("assistant", reply)).takeLast(6)
-        if (preferences.remember) memory.save(history)
+        if (preferences.remember && preferences.mode == Mode.LIVE) memory.save(history)
+        retry = { replayReply(reply) }
         say(reply, stamp)
+    }
+
+    private fun replayReply(reply: String) {
+        if (!canAct()) return
+        cancelWork()
+        val stamp = generation
+        work = scope.launch {
+            try { say(reply, stamp) }
+            catch (e: CancellationException) { if (e is TimeoutCancellationException && stamp == generation) fail(RoadieFailure("음성 재생이 지연됐어요.")) }
+            catch (e: Exception) { if (stamp == generation) fail(e) }
+        }
     }
 
     private suspend fun say(text: String, stamp: Long, after: Phase = Phase.WAITING) {
@@ -158,6 +178,12 @@ class Conversation(
     fun resume() { focusAvailable = true; if (state.value.active) listen() else start() }
 
     fun retry() { if (canAct()) retry?.invoke() }
+
+    fun permissionDenied() {
+        if (!state.value.active) { startedAt = now(); mutable.value = SessionState(active = true) }
+        cancelWork(); retry = { listen() }
+        fail(RoadieFailure("음성 권한이 꺼져 있어요. 정차 후 권한을 허용하면 다시 연결할 수 있어요.", permission = true))
+    }
 
     fun loadBriefing(topic: Topic = preferences.interests.firstOrNull() ?: Topic.TECH) {
         if (!canAct()) return
@@ -227,7 +253,7 @@ class Conversation(
             cancelWork()
             val stamp = generation
             work = scope.launch {
-                try { say("오늘 길은 어떤가요? 이야기하고 싶으면 듣기를 눌러주세요.", stamp) }
+                try { say("오늘 길은 어떤가요? 이야기하고 싶으면 다시 이야기하기를 눌러주세요.", stamp) }
                 catch (_: CancellationException) { }
                 catch (e: Exception) { if (stamp == generation) fail(e) }
             }
@@ -244,6 +270,7 @@ class Conversation(
     fun end() {
         cancelWork(); retry = null; resumeAfterFocus = false; focusAvailable = true
         if (!preferences.remember) clearMemory()
+        else if (preferences.mode == Mode.DEMO) history = emptyList()
         mutable.value = SessionState()
     }
     fun background() = end()
