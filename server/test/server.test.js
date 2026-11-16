@@ -72,7 +72,7 @@ test('client disconnect aborts provider work', async t => {
   assert.equal(signal.aborted, true);
 });
 test('error response cannot expose provider error strings or tokens', async t => {
-  const request = await fixture(t, { chat: async () => { throw new Error('sk-sensitive-private-utterance'); } });
+  const request = await fixture(t, { chat: async () => { throw new Error('test-sensitive-private-utterance'); } });
   const res = await request('/v1/chat', { method: 'POST', body: JSON.stringify({ message: 'hi', history: [] }) });
   assert.equal(res.status, 502); assert.deepEqual(await res.json(), { error: 'upstream_unavailable' });
 });

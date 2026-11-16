@@ -8,7 +8,8 @@
     <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <application android:label="로디 Roadie" android:theme="@style/Theme.Roadie"
-        android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="false"
+        android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules"
+        android:supportsRtl="true" android:usesCleartextTraffic="false"
         android:icon="@drawable/roadie_original">
         <uses-library android:name="android.car" android:required="false" />
         <activity android:name=".MainActivity" android:exported="true" android:resizeableActivity="true">

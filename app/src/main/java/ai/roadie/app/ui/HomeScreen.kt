@@ -100,7 +100,7 @@ data class HomeActions(
 @Composable fun HomeScreen(state: SessionState, preferences: Preferences, settingsAllowed: Boolean, detailsAllowed: Boolean, actions: HomeActions) {
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding()) {
         val compact = maxWidth < 720.dp
-        val short = maxHeight < 500.dp
+        val short = maxHeight < 620.dp
         val pad = if (compact || short) 20.dp else 40.dp
         Column(Modifier.fillMaxSize().padding(pad), verticalArrangement = Arrangement.spacedBy(if (short) 12.dp else 24.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {

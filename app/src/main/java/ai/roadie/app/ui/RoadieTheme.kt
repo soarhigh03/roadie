@@ -1,12 +1,16 @@
+@file:OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+
 package ai.roadie.app.ui
 
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.unit.sp
 import ai.roadie.app.R
 import ai.roadie.core.Theme
@@ -17,8 +21,12 @@ val Cream = Color(0xFFFFFEF5)
 val Silver = Color(0xFFBFC3CB)
 val Ink = Color(0xFF24262B)
 val Night = Color(0xFF16181C)
-val Korean = FontFamily(Font(R.font.noto_sans_kr))
-val Brand = FontFamily(Font(R.font.dm_sans, FontWeight.Bold))
+val Korean = FontFamily(
+    Font(R.font.noto_sans_kr, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.noto_sans_kr, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.noto_sans_kr, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+)
+val Brand = FontFamily(Font(R.font.dm_sans, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))))
 val Mono = FontFamily(Font(R.font.space_mono))
 
 @Composable fun RoadieTheme(theme: Theme, content: @Composable () -> Unit) {
@@ -38,5 +46,7 @@ val Mono = FontFamily(Font(R.font.space_mono))
         bodyMedium = TextStyle(fontFamily = Korean, fontSize = 20.sp, lineHeight = 30.sp),
         labelLarge = TextStyle(fontFamily = Korean, fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Medium),
         labelMedium = TextStyle(fontFamily = Korean, fontSize = 18.sp, lineHeight = 26.sp),
-    ), content = content)
+    )) {
+        CompositionLocalProvider(LocalContentColor provides colors.onBackground, content = content)
+    }
 }
